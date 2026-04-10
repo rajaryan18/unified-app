@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import { LogIn, Loader2, User } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -35,6 +35,7 @@ export default function LoginForm() {
       login({
         userId: data.user.id,
         email: data.user.name,
+        username: data.user.username,
         name: data.user.name,
         token: data.token,
       });
@@ -63,18 +64,15 @@ export default function LoginForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">Username</label>
-            <div className="relative">
-              <User size={18} className="absolute left-4 top-3.5 text-zinc-500" />
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="input-field pl-11"
-                placeholder="Username"
-                required
-                autoComplete="username"
-              />
-            </div>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="input-field"
+              placeholder="Username"
+              required
+              autoComplete="username"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">Password</label>

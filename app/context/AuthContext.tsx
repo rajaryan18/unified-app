@@ -6,8 +6,9 @@ import { useRouter, usePathname } from "next/navigation";
 export interface User {
   userId: string;
   email: string;
+  username: string;
+  name: string;
   token: string;
-  name?: string;
 }
 
 interface AuthContextType {
@@ -34,9 +35,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(parsedUser);
         } else {
           localStorage.removeItem("unified_user");
+          localStorage.removeItem("unified_token");
+          localStorage.removeItem("unified_userId");
+          localStorage.removeItem("unified_username");
         }
       } catch (e) {
         localStorage.removeItem("unified_user");
+        localStorage.removeItem("unified_token");
+        localStorage.removeItem("unified_userId");
+        localStorage.removeItem("unified_username");
       }
     }
     setIsLoading(false);
@@ -54,14 +61,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = (userData: User) => {
     const expiryDate = new Date().getTime() + 30 * 24 * 60 * 60 * 1000;
     const dataToStore = { ...userData, expiryDate };
-    setUser(userData);
+
+    // Store full user object
     localStorage.setItem("unified_user", JSON.stringify(dataToStore));
+    // Store individual fields for easy access
+    localStorage.setItem("unified_token", userData.token);
+    localStorage.setItem("unified_userId", userData.userId);
+    localStorage.setItem("unified_username", userData.username);
+    localStorage.setItem("unified_email", userData.email);
+    localStorage.setItem("unified_name", userData.name);
+
+    setUser(userData);
     router.push("/");
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem("unified_user");
+    localStorage.removeItem("unified_token");
+    localStorage.removeItem("unified_userId");
+    localStorage.removeItem("unified_username");
+    localStorage.removeItem("unified_email");
+    localStorage.removeItem("unified_name");
     router.push("/auth");
   };
 

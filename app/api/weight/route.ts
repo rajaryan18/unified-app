@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       email: GYM_EMAIL,
       weight,
       unit: 'kg',
-      date: new Date().toISOString(),
+      date: new Date(),
     });
 
     return NextResponse.json(entry, { status: 201 });

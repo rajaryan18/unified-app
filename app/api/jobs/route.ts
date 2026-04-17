@@ -10,14 +10,19 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
 
     const db = DatabaseFactory.getDatabase('jobs');
-    const filter: Record<string, unknown> = { user_id: HARDCODED_USER_ID };
+    const filter: Record<string, unknown> = { 
+      $or: [{ user_id: HARDCODED_USER_ID }, { user_id: 'hardcoded_user_001' }]
+    };
     if (status) filter.status = status;
 
     const jobs = await db.find(JOBS_TRACKED, filter, { sort: { created_at: -1 } });
 
     // Attach referrals to each job
     for (const job of jobs as Array<Record<string, unknown>>) {
-      const referrals = await db.find(JOBS_REFERRALS, { user_id: HARDCODED_USER_ID, job_id: job.job_id });
+      const referrals = await db.find(JOBS_REFERRALS, { 
+        $or: [{ user_id: HARDCODED_USER_ID }, { user_id: 'hardcoded_user_001' }],
+        job_id: job.job_id 
+      });
       job.referrals = referrals;
     }
 
@@ -43,7 +48,7 @@ export async function POST(request: Request) {
       source: body.source || 'manual',
       last_followup: null,
       notes: [],
-      created_at: new Date().toISOString(),
+      created_at: new Date(),
     });
 
     return NextResponse.json(job, { status: 201 });

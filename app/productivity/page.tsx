@@ -6,11 +6,15 @@ import Link from "next/link";
 
 type TimeSegment = "Before breakfast" | "Before lunch" | "Before gym" | "Before dinner" | "Before sleep";
 
-interface Goal { _id: string; goalId: string; date: string; segment: TimeSegment; text: string; isCompleted: boolean; classification?: "productive" | "waste" | "none"; createdAt: string; }
+type GoalStatus = "todo" | "in_progress" | "completed";
+
+interface Goal { _id: string; goalId: string; date: string; segment: TimeSegment; text: string; isCompleted: boolean; status: GoalStatus; classification?: "productive" | "waste" | "none"; createdAt: string; }
 
 const SEGMENTS: TimeSegment[] = ["Before breakfast", "Before lunch", "Before gym", "Before dinner", "Before sleep"];
 const SEGMENT_ICONS: Record<TimeSegment, string> = { "Before breakfast": "🌅", "Before lunch": "☀️", "Before gym": "💪", "Before dinner": "🌙", "Before sleep": "💤" };
 const SEGMENT_COLORS: Record<TimeSegment, string> = { "Before breakfast": "#f59e0b", "Before lunch": "#3b82f6", "Before gym": "#10b981", "Before dinner": "#8b5cf6", "Before sleep": "#6366f1" };
+
+import KanbanBoard from "./components/KanbanBoard";
 
 export default function ProductivityPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -25,6 +29,7 @@ export default function ProductivityPage() {
   const [isAlwaysRecurring, setIsAlwaysRecurring] = useState(true);
   const [isAddingRecurring, setIsAddingRecurring] = useState(false);
   const [deletingRecurringId, setDeletingRecurringId] = useState<string | null>(null);
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
   const [classifyingGoalId, setClassifyingGoalId] = useState<string | null>(null);
 
   const fetchGoals = useCallback(async () => {
@@ -51,7 +56,7 @@ export default function ProductivityPage() {
           const start = new Date(rg.startDate); const current = new Date(today); const end = rg.endDate ? new Date(rg.endDate) : null;
           if (current >= start && (!end || current <= end)) {
             const exists = goals.find((g) => g.text === rg.text && g.segment === rg.segment);
-            if (!exists) { needsUpdate = true; await authenticatedFetch("/api/goals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: today, segment: rg.segment, text: rg.text }) }); }
+            if (!exists) { needsUpdate = true; await authenticatedFetch("/api/goals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: today, segment: rg.segment, text: rg.text, status: "todo" }) }); }
           }
         }
         if (needsUpdate) fetchGoals();
@@ -73,36 +78,61 @@ export default function ProductivityPage() {
     catch (error) { console.error("Failed to delete recurring goal:", error); }
   };
 
-  const handleAddGoal = async (segment: TimeSegment, text: string) => { const response = await authenticatedFetch("/api/goals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, segment, text }) }); if (response.ok) fetchGoals(); };
-
-  const handleToggleGoal = async (goal: Goal) => {
-    if (goal.isCompleted) { await fetch("/api/goals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: goal.goalId, isCompleted: false, classification: "none" }) }); fetchGoals(); }
-    else { setClassifyingGoalId(goal.goalId); }
+  const handleAddGoal = async (text: string, segment: TimeSegment) => { 
+    const response = await authenticatedFetch("/api/goals", { 
+      method: "POST", 
+      headers: { "Content-Type": "application/json" }, 
+      body: JSON.stringify({ date, segment, text, status: "todo" }) 
+    }); 
+    if (response.ok) fetchGoals(); 
   };
 
-  const handleClassifyGoal = async (goal: Goal, classification: "productive" | "waste") => {
-    await fetch("/api/goals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: goal.goalId, isCompleted: true, classification }) });
-    setClassifyingGoalId(null); fetchGoals();
+  const handleUpdateStatus = async (goalId: string, newStatus: GoalStatus) => {
+    const goal = goals.find(g => g.goalId === goalId);
+    if (!goal) return;
+
+    if (newStatus === "completed") {
+      setClassifyingGoalId(goalId);
+    } else {
+      await authenticatedFetch("/api/goals", { 
+        method: "PATCH", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify({ id: goalId, status: newStatus, isCompleted: false, classification: "none" }) 
+      });
+      fetchGoals();
+    }
   };
 
-  const handleDeleteGoal = async (goalId: string) => { await fetch(`/api/goals?id=${goalId}`, { method: "DELETE" }); fetchGoals(); };
+  const handleClassifyGoal = async (goalId: string, classification: "productive" | "waste") => {
+    await authenticatedFetch("/api/goals", { 
+      method: "PATCH", 
+      headers: { "Content-Type": "application/json" }, 
+      body: JSON.stringify({ id: goalId, status: "completed", isCompleted: true, classification }) 
+    });
+    setClassifyingGoalId(null); 
+    fetchGoals();
+  };
 
-  const stats = useMemo(() => { const total = goals.length; const completed = goals.filter((g) => g.isCompleted).length; const percentage = total > 0 ? Math.round((completed / total) * 100) : 0; return { total, completed, percentage }; }, [goals]);
+  const handleDeleteGoal = async (goalId: string) => { 
+    await authenticatedFetch(`/api/goals?id=${goalId}`, { method: "DELETE" }); 
+    setDeletingGoalId(null);
+    fetchGoals(); 
+  };
 
-  const getGoalsForSegment = (segment: TimeSegment) => goals.filter((g) => g.segment === segment);
+  const stats = useMemo(() => { const total = goals.length; const completed = goals.filter((g) => g.status === "completed").length; const percentage = total > 0 ? Math.round((completed / total) * 100) : 0; return { total, completed, percentage }; }, [goals]);
 
   const formattedDate = new Date(date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-  if (loading) return <div className="animate-pulse text-center py-20 text-zinc-400">Loading your agenda...</div>;
+  if (loading) return <div className="animate-pulse text-center py-20 text-zinc-400">Loading your board...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 py-8 animate-fade-in">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-12 gap-4">
         <div>
           <p className="text-blue-400 font-semibold text-sm uppercase tracking-widest mb-2">{formattedDate}</p>
-          <h1 className="text-4xl font-black gradient-text mb-0">Daily Focus</h1>
+          <h1 className="text-4xl font-black gradient-text mb-0">Daily Board</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => setShowRecurringManager(true)} className="glass-panel px-4 py-2 text-sm font-semibold text-blue-400 border border-blue-400/20 hover:bg-blue-400/10 transition-all cursor-pointer">🔄 Recurring</button>
           <Link href="/insights" className="glass-panel px-4 py-2 text-sm font-semibold text-emerald-400 border border-emerald-400/20 hover:bg-emerald-400/10 transition-all">📊 Insights</Link>
           <div className="glass-panel px-4 py-2 flex items-center gap-3">
@@ -112,21 +142,55 @@ export default function ProductivityPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-3 gap-6 mb-10">
-        <div className="glass-panel stat-card"><div className="stat-label">Total Goals</div><div className="stat-value text-glow">{stats.total}</div></div>
-        <div className="glass-panel stat-card"><div className="stat-label">Completed</div><div className="stat-value text-emerald-400">{stats.completed}</div></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+        <div className="glass-panel stat-card"><div className="stat-label">Total Tasks</div><div className="stat-value text-glow">{stats.total}</div></div>
+        <div className="glass-panel stat-card"><div className="stat-label">Productive</div><div className="stat-value text-emerald-400">{goals.filter(g => g.classification === 'productive').length}</div></div>
+        <div className="glass-panel stat-card"><div className="stat-label">Time Waste</div><div className="stat-value text-red-400">{goals.filter(g => g.classification === 'waste').length}</div></div>
         <div className="glass-panel stat-card">
-          <div className="stat-label">Progress</div><div className="stat-value text-purple-400">{stats.percentage}%</div>
+          <div className="stat-label">Efficiency</div><div className="stat-value text-purple-400">{stats.percentage}%</div>
           <div className="w-full h-2 bg-white/5 rounded-lg mt-3 overflow-hidden"><div className="h-full bg-gradient-to-r from-emerald-400 to-purple-400 rounded-lg transition-all duration-500" style={{ width: `${stats.percentage}%` }} /></div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {SEGMENTS.map((segment) => {
-          const segmentGoals = getGoalsForSegment(segment);
-          return <SegmentBoard key={segment} segment={segment} goals={segmentGoals} onAddGoal={handleAddGoal} onToggleGoal={handleToggleGoal} onClassifyGoal={handleClassifyGoal} onDeleteGoal={handleDeleteGoal} classifyingGoalId={classifyingGoalId} />;
-        })}
-      </div>
+      <KanbanBoard 
+        goals={goals}
+        onUpdateStatus={handleUpdateStatus}
+        onDeleteGoal={handleDeleteGoal}
+        onAddGoal={handleAddGoal}
+        classifyingGoalId={classifyingGoalId}
+        deletingGoalId={deletingGoalId}
+        setDeletingGoalId={setDeletingGoalId}
+      />
+
+      {/* Classification Modal */}
+      {classifyingGoalId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="glass-panel max-w-sm w-full p-8 text-center" style={{ background: "rgba(15,23,42,0.95)" }}>
+            <h2 className="text-2xl font-black mb-2 gradient-text">Task Complete!</h2>
+            <p className="text-zinc-400 mb-8">How would you classify this effort?</p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => handleClassifyGoal(classifyingGoalId, "productive")}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+              >
+                🚀 Productive Session
+              </button>
+              <button 
+                onClick={() => handleClassifyGoal(classifyingGoalId, "waste")}
+                className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2"
+              >
+                🗑️ Time Waste
+              </button>
+              <button 
+                onClick={() => setClassifyingGoalId(null)}
+                className="mt-4 text-zinc-500 hover:text-white transition-colors text-sm font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showRecurringManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setShowRecurringManager(false)}>
@@ -160,47 +224,6 @@ export default function ProductivityPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function SegmentBoard({ segment, goals, onAddGoal, onToggleGoal, onClassifyGoal, onDeleteGoal, classifyingGoalId }: {
-  segment: TimeSegment; goals: any[]; onAddGoal: (s: TimeSegment, t: string) => void; onToggleGoal: (g: any) => void; onClassifyGoal: (g: any, c: "productive" | "waste") => void; onDeleteGoal: (id: string) => void; classifyingGoalId: string | null;
-}) {
-  const [newGoalText, setNewGoalText] = useState("");
-  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
-
-  return (
-    <div className="glass-panel flex flex-col" style={{ borderLeft: `4px solid ${SEGMENT_COLORS[segment]}` }}>
-      <div className="mb-4">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-lg font-bold flex items-center gap-2"><span className="text-xl">{SEGMENT_ICONS[segment]}</span>{segment}</h3>
-          <span className="text-xs font-bold px-2 py-1 rounded-full bg-white/5 text-zinc-400">{goals.filter((g) => g.isCompleted).length}/{goals.length}</span>
-        </div>
-        <div className="w-full h-1 bg-white/5 rounded-lg overflow-hidden"><div className="h-full rounded-lg transition-all" style={{ width: `${goals.length > 0 ? (goals.filter((g) => g.isCompleted).length / goals.length) * 100 : 0}%`, background: SEGMENT_COLORS[segment] }} /></div>
-      </div>
-      <div className="flex-1 space-y-2 mb-4">
-        {goals.map((goal) => (
-          <div key={goal.goalId} className="p-3 bg-white/5 rounded-xl border border-white/5">
-            <div className="flex items-center gap-3">
-              <input type="checkbox" checked={goal.isCompleted} onChange={() => onToggleGoal(goal)} className="w-5 h-5 cursor-pointer" style={{ accentColor: SEGMENT_COLORS[segment] }} />
-              <span className={`flex-1 ${goal.isCompleted ? "line-through text-zinc-500" : "text-white"}`}>{goal.text}</span>
-              <button onClick={() => setDeletingGoalId(goal.goalId)} className="text-red-400 bg-none border-none cursor-pointer text-sm">✕</button>
-            </div>
-            {deletingGoalId === goal.goalId && (
-              <div className="mt-2 flex gap-2 items-center"><span className="text-red-300 text-xs">Delete?</span><button onClick={() => onDeleteGoal(goal.goalId)} className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">Delete</button><button onClick={() => setDeletingGoalId(null)} className="px-2 py-1 bg-white/10 text-white rounded text-xs">Cancel</button></div>
-            )}
-            {classifyingGoalId === goal.goalId && !goal.isCompleted && (
-              <div className="mt-2 flex gap-2"><button onClick={() => onClassifyGoal(goal, "productive")} className="flex-1 py-1 bg-emerald-500 text-white rounded text-xs font-semibold">🚀 Productive</button><button onClick={() => onClassifyGoal(goal, "waste")} className="flex-1 py-1 bg-red-500 text-white rounded text-xs font-semibold">🗑️ Waste</button><button onClick={() => onClassifyGoal(null as any, "productive")} className="px-2 text-zinc-400 bg-none border-none cursor-pointer text-xs">Cancel</button></div>
-            )}
-          </div>
-        ))}
-        {goals.length === 0 && <div className="h-20 flex items-center justify-center border-2 border-dashed border-white/5 rounded-xl text-zinc-500 text-sm italic">Empty segment</div>}
-      </div>
-      <form onSubmit={(e) => { e.preventDefault(); if (newGoalText.trim()) { onAddGoal(segment, newGoalText); setNewGoalText(""); } }} className="flex gap-2">
-        <input type="text" className="input-field text-sm" placeholder="New goal..." value={newGoalText} onChange={(e) => setNewGoalText(e.target.value)} />
-        <button type="submit" className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold cursor-pointer" style={{ background: SEGMENT_COLORS[segment] }}>+</button>
-      </form>
     </div>
   );
 }

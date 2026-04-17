@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       sessionId: `session_${uuidv4().replace(/-/g, '').slice(0, 12)}`,
       userId: HARDCODED_USER_ID,
       email: GYM_EMAIL,
-      date: new Date().toISOString(),
+      date: new Date(),
       workoutTime,
       exercises,
     });

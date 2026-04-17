@@ -15,13 +15,16 @@ export async function GET(request: Request) {
     const db = DatabaseFactory.getDatabase('productivity');
 
     if (type === 'daily' && date) {
-      const insights = await db.find(PROD_INSIGHTS, { userId: HARDCODED_USER_ID, date }, { sort: { sessionName: 1 } });
+      const insights = await db.find(PROD_INSIGHTS, { 
+        $or: [{ userId: HARDCODED_USER_ID }, { userId: 'hardcoded_user_001' }],
+        date 
+      }, { sort: { sessionName: 1 } });
       return NextResponse.json(insights);
     }
 
     if (type === 'weekly' && startDate && endDate) {
       const insights = await db.find<Record<string, unknown>>(PROD_INSIGHTS, {
-        userId: HARDCODED_USER_ID,
+        $or: [{ userId: HARDCODED_USER_ID }, { userId: 'hardcoded_user_001' }],
         date: { $gte: startDate, $lte: endDate },
       }, { sort: { date: 1 } });
 

@@ -8,7 +8,9 @@ const HARDCODED_USER_ID = process.env.HARDCODED_USER_ID || 'hardcoded_user_001';
 export async function GET() {
   try {
     const db = DatabaseFactory.getDatabase('productivity');
-    const goals = await db.find(PROD_RECURRING, { userId: HARDCODED_USER_ID }, { sort: { createdAt: -1 } });
+    const goals = await db.find(PROD_RECURRING, { 
+      $or: [{ userId: HARDCODED_USER_ID }, { userId: 'hardcoded_user_001' }] 
+    }, { sort: { createdAt: -1 } });
     return NextResponse.json(goals);
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

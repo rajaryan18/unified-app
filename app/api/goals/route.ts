@@ -11,7 +11,13 @@ export async function GET(request: Request) {
     const date = searchParams.get('date');
 
     const db = DatabaseFactory.getDatabase('productivity');
-    const filter: Record<string, unknown> = { userId: HARDCODED_USER_ID };
+    // Support both the current ID and the legacy default ID
+    const filter: Record<string, unknown> = { 
+      $or: [
+        { userId: HARDCODED_USER_ID },
+        { userId: 'hardcoded_user_001' }
+      ]
+    };
     if (date) filter.date = date;
 
     const goals = await db.find(PROD_GOALS, filter, { sort: { segment: 1 } });
@@ -23,7 +29,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { goalId, date, segment, text } = await request.json();
+    const { goalId, date, segment, text, status } = await request.json();
     if (!date || !segment || !text) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 
     const db = DatabaseFactory.getDatabase('productivity');
@@ -33,7 +39,9 @@ export async function POST(request: Request) {
       date,
       segment,
       text,
-      isCompleted: false,
+      isCompleted: status === 'completed' || false,
+      status: status || 'todo',
+      createdAt: new Date(),
     });
     return NextResponse.json(goal, { status: 201 });
   } catch {
@@ -43,7 +51,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const { id, isCompleted, classification, segment } = await request.json();
+    const { id, isCompleted, classification, segment, status } = await request.json();
     if (!id) return NextResponse.json({ error: 'Goal ID is required' }, { status: 400 });
 
     const db = DatabaseFactory.getDatabase('productivity');
@@ -51,6 +59,11 @@ export async function PATCH(request: Request) {
     if (typeof isCompleted === 'boolean') update.isCompleted = isCompleted;
     if (classification) update.classification = classification;
     if (segment) update.segment = segment;
+    if (status) {
+      update.status = status;
+      if (status === 'completed') update.isCompleted = true;
+      else update.isCompleted = false;
+    }
 
     const ok = await db.updateOne(PROD_GOALS, { goalId: id }, { $set: update });
     if (!ok) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });

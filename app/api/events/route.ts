@@ -11,7 +11,9 @@ export async function GET(request: Request) {
     const date = searchParams.get('date');
 
     const db = DatabaseFactory.getDatabase('productivity');
-    const filter: Record<string, unknown> = { userId: HARDCODED_USER_ID };
+    const filter: Record<string, unknown> = { 
+      $or: [{ userId: HARDCODED_USER_ID }, { userId: 'hardcoded_user_001' }]
+    };
     if (date) filter.date = date;
 
     const events = await db.find(PROD_EVENTS, filter, { sort: { startTime: 1 } });
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
       description,
       startTime,
       endTime,
+      createdAt: new Date(),
     });
     return NextResponse.json(event, { status: 201 });
   } catch {

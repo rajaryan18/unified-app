@@ -10,7 +10,10 @@ export async function GET(request: Request) {
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
     const db = DatabaseFactory.getDatabase('productivity');
-    const goals = await db.find<Record<string, unknown>>(PROD_GOALS, { userId: HARDCODED_USER_ID, date });
+    const goals = await db.find<Record<string, unknown>>(PROD_GOALS, { 
+      $or: [{ userId: HARDCODED_USER_ID }, { userId: 'hardcoded_user_001' }],
+      date 
+    });
 
     const totalGoals = goals.length;
     const completedGoals = goals.filter((g) => g.isCompleted).length;
